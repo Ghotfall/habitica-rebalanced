@@ -1,20 +1,30 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/aws/aws-lambda-go/lambda"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"os"
 )
 
 func main() {
 	lambda.Start(handle)
 }
 
-func handle(_ context.Context, update tgbotapi.Update) (string, error) {
-	if update.Message != nil {
-		return fmt.Sprintf("Message: %s", update.Message.Text), nil
-	} else {
-		return "Not a text message", nil
+func handle(update tgbotapi.Update) error {
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
+	if err != nil {
+		return err
 	}
+
+	bot.Debug = true
+
+	//msg := tgbotapi.NewMessage(update.Message.Chat.ID, update.Message.Text)
+	//if _, err := bot.Send(msg); err != nil {
+	//	return err
+	//}
+
+	fmt.Printf("%+v", update)
+
+	return nil
 }
