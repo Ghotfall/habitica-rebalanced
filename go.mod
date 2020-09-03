@@ -5,4 +5,5 @@ go 1.15
 require (
 	github.com/aws/aws-lambda-go v1.19.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.0.0-rc1
+	github.com/sirupsen/logrus v1.6.0
 )
