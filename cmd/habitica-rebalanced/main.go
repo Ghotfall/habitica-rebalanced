@@ -2,33 +2,45 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/ghotfall/habitica-rebalanced/pkg/bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 )
 
 func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	log.SetFormatter(&log.JSONFormatter{})
-	var u tgbotapi.Update
-	if err := json.Unmarshal([]byte(req.Body), &u); err == nil {
-		if u.Message == nil {
-			return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
-		}
+	var wg sync.WaitGroup
 
-		if !u.Message.IsCommand() {
-			return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
-		}
+	// Request
+	u, pErr := bot.ParseUpdate(req.Body)
+	if pErr != nil {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, pErr
+	}
 
-		bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
+	// Bot API
+	api, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
+	if err != nil {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
+	}
+
+	// Processing update
+	if u.CallbackQuery != nil {
+		c, err := processCallback(u.CallbackQuery)
 		if err != nil {
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 		}
 
+		go sendMsg(api, c, &wg)
+
+	} else if u.Message.IsCommand() {
 		msg := tgbotapi.NewMessage(u.Message.Chat.ID, "")
 		switch u.Message.Command() {
 		case "start":
@@ -38,19 +50,11 @@ func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (eve
 		case "status":
 			msg.Text = "I'm ok 🤖"
 		case "dice":
-			go bot.Send(tgbotapi.NewDice(u.Message.Chat.ID))
+			go api.Send(tgbotapi.NewDice(u.Message.Chat.ID))
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
-		case "open":
-			msg.Text = u.Message.Command()
-			msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
-				tgbotapi.NewKeyboardButtonRow(
-					tgbotapi.NewKeyboardButton("A"),
-					tgbotapi.NewKeyboardButton("B"),
-					tgbotapi.NewKeyboardButton("C"),
-				))
-		case "close":
-			msg.Text = u.Message.Command()
-			msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
+		case "score":
+			msg.Text = "Score: 0"
+			msg.ReplyMarkup = getKeyboardMarkup()
 		case "whoami":
 			switch u.Message.CommandArguments() {
 			case "aws":
@@ -62,14 +66,61 @@ func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (eve
 		default:
 			msg.Text = fmt.Sprintf("I don't know this command: `%s`", u.Message.Command())
 		}
-
-		go bot.Send(msg)
-
-	} else {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, fmt.Errorf("failed to unmarshall object")
+		go sendMsg(api, msg, &wg)
 	}
 
+	wg.Wait()
 	return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
+}
+
+func sendMsg(api *tgbotapi.BotAPI, c tgbotapi.Chattable, wg *sync.WaitGroup) {
+	wg.Add(1)
+	defer wg.Done()
+
+	_, err := api.Send(c)
+	if err != nil {
+		log.Errorf("Failed to send message: %s", err.Error())
+	}
+}
+
+func processCallback(query *tgbotapi.CallbackQuery) (tgbotapi.Chattable, error) {
+	if query.Message != nil {
+		scoreStr := strings.Fields(query.Message.Text)
+		scoreInt, err := strconv.Atoi(scoreStr[1])
+		if err != nil {
+			log.Error("Internal error: failed to parse score")
+			return nil, err
+		}
+
+		switch query.Data {
+		case "score_p1":
+			scoreInt++
+		case "score_m1":
+			scoreInt--
+		case "score_r":
+			scoreInt = 0
+		}
+		msg := fmt.Sprintf("Score: %d", scoreInt)
+		return tgbotapi.NewEditMessageTextAndMarkup(
+			query.Message.Chat.ID,
+			query.Message.MessageID,
+			msg,
+			getKeyboardMarkup()), nil
+	} else {
+		return nil, fmt.Errorf("callback message is empty")
+	}
+}
+
+func getKeyboardMarkup() tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("+1", "score_p1"),
+			tgbotapi.NewInlineKeyboardButtonData("-1", "score_m1"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Reset", "score_r"),
+		),
+	)
 }
 
 func main() {
