@@ -9,15 +9,14 @@ import (
 	"github.com/ghotfall/habitica-rebalanced/pkg/bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	log.SetFormatter(&log.JSONFormatter{})
-	var wg sync.WaitGroup
 
 	// Request
 	u, pErr := bot.ParseUpdate(req.Body)
@@ -38,7 +37,7 @@ func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (eve
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 		}
 
-		go sendMsg(api, c, &wg)
+		sendMsg(api, c)
 
 	} else if u.Message.IsCommand() {
 		msg := tgbotapi.NewMessage(u.Message.Chat.ID, "")
@@ -66,17 +65,14 @@ func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (eve
 		default:
 			msg.Text = fmt.Sprintf("I don't know this command: `%s`", u.Message.Command())
 		}
-		go sendMsg(api, msg, &wg)
+
+		sendMsg(api, msg)
 	}
 
-	wg.Wait()
 	return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 }
 
-func sendMsg(api *tgbotapi.BotAPI, c tgbotapi.Chattable, wg *sync.WaitGroup) {
-	wg.Add(1)
-	defer wg.Done()
-
+func sendMsg(api *tgbotapi.BotAPI, c tgbotapi.Chattable) {
 	_, err := api.Send(c)
 	if err != nil {
 		log.Errorf("Failed to send message: %s", err.Error())
@@ -121,6 +117,11 @@ func getKeyboardMarkup() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("Reset", "score_r"),
 		),
 	)
+}
+
+type ReplyPayload struct {
+	Method string `json:"method"`
+	Params url.Values
 }
 
 func main() {
