@@ -37,6 +37,10 @@ func HandleRequest(ctx context.Context, req events.APIGatewayV2HTTPRequest) (eve
 		}
 
 		sendMsg(api, c)
+		sendACQ(api, tgbotapi.CallbackConfig{
+			CallbackQueryID: u.CallbackQuery.ID,
+			Text:            "Score updated!",
+		})
 
 	} else if u.Message.IsCommand() {
 		msg := tgbotapi.NewMessage(u.Message.Chat.ID, "")
@@ -75,6 +79,13 @@ func sendMsg(api *tgbotapi.BotAPI, c tgbotapi.Chattable) {
 	_, err := api.Send(c)
 	if err != nil {
 		log.Errorf("Failed to send message: %s", err.Error())
+	}
+}
+
+func sendACQ(api *tgbotapi.BotAPI, c tgbotapi.CallbackConfig) {
+	_, err := api.AnswerCallbackQuery(c)
+	if err != nil {
+		log.Errorf("Failed to send answer to callback query: %s", err.Error())
 	}
 }
 
