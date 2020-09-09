@@ -9,7 +9,6 @@ import (
 	"github.com/ghotfall/habitica-rebalanced/pkg/bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -117,11 +116,6 @@ func getKeyboardMarkup() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("Reset", "score_r"),
 		),
 	)
-}
-
-type ReplyPayload struct {
-	Method string `json:"method"`
-	Params url.Values
 }
 
 func main() {
