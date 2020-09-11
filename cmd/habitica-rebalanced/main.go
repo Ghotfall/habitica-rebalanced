@@ -10,27 +10,27 @@ import (
 	"os"
 )
 
-func HandleRequest(_ context.Context, req events.APIGatewayV2HTTPRequest) events.APIGatewayV2HTTPResponse {
+func HandleRequest(_ context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	log.SetFormatter(&log.JSONFormatter{})
 
 	// Bot API
 	api, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_API_TOKEN"))
 	if err != nil {
 		log.Errorf("Failed to authorize to the API: %s", err.Error())
-		return events.APIGatewayV2HTTPResponse{StatusCode: 403}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 403}, err
 	}
 
 	// Request
 	u, pErr := bot.ParseUpdate(req.Body)
 	if pErr != nil {
 		log.Errorf("Failed to parse update: %s", pErr.Error())
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, pErr
 	}
 
 	// Processing update
 	bot.Entry(api, u)
 
-	return events.APIGatewayV2HTTPResponse{StatusCode: 200}
+	return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 }
 
 func main() {
