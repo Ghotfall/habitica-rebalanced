@@ -18,7 +18,24 @@ func ParseUpdate(data string) (*tgbotapi.Update, error) {
 }
 
 func Entry(api *tgbotapi.BotAPI, u *tgbotapi.Update) {
-	if u.Message != nil {
+	if u.CallbackQuery != nil {
+		resp, err := habitica.GetUserTask(u.CallbackQuery.Data)
+		if err == nil && u.CallbackQuery.Message != nil {
+			_, mErr := api.Send(tgbotapi.NewMessage(u.CallbackQuery.Message.Chat.ID, resp))
+			if mErr != nil {
+				log.Errorf("Failed to send answer to user: %s", mErr.Error())
+			}
+
+			_, cErr := api.AnswerCallbackQuery(tgbotapi.CallbackConfig{
+				CallbackQueryID: u.CallbackQuery.ID,
+				Text:            "Processing...",
+			})
+			if cErr != nil {
+				log.Errorf("Failed to send callback answer to user: %s", cErr.Error())
+			}
+		}
+
+	} else if u.Message != nil {
 		if u.Message.IsCommand() {
 			msg := tgbotapi.NewMessage(u.Message.Chat.ID, "")
 
@@ -32,7 +49,8 @@ func Entry(api *tgbotapi.BotAPI, u *tgbotapi.Update) {
 			case "get_tasks":
 				resp, err := habitica.GetUserTasks()
 				if err == nil {
-					msg.Text = resp
+					msg.Text = "Your tasks:"
+					msg.ReplyMarkup = resp
 				}
 			}
 
