@@ -5,6 +5,7 @@ import (
 	"github.com/ghotfall/habitica-rebalanced/pkg/habitica"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	log "github.com/sirupsen/logrus"
+	"strings"
 )
 
 func ParseUpdate(data string) (*tgbotapi.Update, error) {
@@ -19,26 +20,21 @@ func ParseUpdate(data string) (*tgbotapi.Update, error) {
 
 func Entry(api *tgbotapi.BotAPI, u *tgbotapi.Update) {
 	if u.CallbackQuery != nil {
-		resp, err := habitica.GetUserTask(u.CallbackQuery.Data)
-		if err == nil && u.CallbackQuery.Message != nil {
-			_, mErr := api.Send(tgbotapi.NewMessage(u.CallbackQuery.Message.Chat.ID, resp))
-			if mErr != nil {
-				log.Errorf("Failed to send answer to user: %s", mErr.Error())
-			}
+		// Split data string to get exact command
+		spl := strings.Split(u.CallbackQuery.Data, " ")
 
-			_, cErr := api.AnswerCallbackQuery(tgbotapi.CallbackConfig{
-				CallbackQueryID: u.CallbackQuery.ID,
-				Text:            "Processing...",
-			})
-			if cErr != nil {
-				log.Errorf("Failed to send callback answer to user: %s", cErr.Error())
-			}
+		// Find this command
+		switch spl[0] {
+		case "get":
+			GetTask(api, spl[1], u.CallbackQuery)
 		}
 
 	} else if u.Message != nil {
 		if u.Message.IsCommand() {
+			// Create new message
 			msg := tgbotapi.NewMessage(u.Message.Chat.ID, "")
 
+			// Fort message body depending on used command
 			switch u.Message.Command() {
 			case "get_user":
 				resp, err := habitica.GetUserInfo()
@@ -54,6 +50,7 @@ func Entry(api *tgbotapi.BotAPI, u *tgbotapi.Update) {
 				}
 			}
 
+			// Send message if body is not empty
 			if msg.Text != "" {
 				_, err := api.Send(msg)
 				if err != nil {

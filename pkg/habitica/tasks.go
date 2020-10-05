@@ -48,7 +48,7 @@ func (t *Tasks) InlineKeyboard() tgbotapi.InlineKeyboardMarkup {
 
 	for _, task := range t.Data {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(task.Text, task.ID),
+			tgbotapi.NewInlineKeyboardButtonData(task.Text, "get "+task.ID),
 		))
 	}
 
